@@ -25,12 +25,14 @@
 #include <memory>
 #include <mutex>
 
-int32_t main(int32_t argc, char **argv) {
+int32_t main(int32_t argc, char **argv)
+{
     int32_t retCode{1};
     auto commandlineArguments = cluon::getCommandlineArguments(argc, argv);
-    if ( (0 == commandlineArguments.count("name")) ||
-         (0 == commandlineArguments.count("width")) ||
-         (0 == commandlineArguments.count("height")) ) {
+    if ((0 == commandlineArguments.count("name")) ||
+        (0 == commandlineArguments.count("width")) ||
+        (0 == commandlineArguments.count("height")))
+    {
         std::cerr << argv[0] << " attaches to a shared memory area containing an ARGB image and transform it to HSV color space for inspection." << std::endl;
         std::cerr << "Usage:   " << argv[0] << " --name=<name of shared memory area> --width=<W> --height=<H>" << std::endl;
         std::cerr << "         --name:   name of the shared memory area to attach" << std::endl;
@@ -38,14 +40,16 @@ int32_t main(int32_t argc, char **argv) {
         std::cerr << "         --height: height of the frame" << std::endl;
         std::cerr << "Example: " << argv[0] << " --name=img.argb --width=640 --height=480" << std::endl;
     }
-    else {
+    else
+    {
         const std::string NAME{commandlineArguments["name"]};
         const uint32_t WIDTH{static_cast<uint32_t>(std::stoi(commandlineArguments["width"]))};
         const uint32_t HEIGHT{static_cast<uint32_t>(std::stoi(commandlineArguments["height"]))};
 
         // Attach to the shared memory.
         std::unique_ptr<cluon::SharedMemory> sharedMemory{new cluon::SharedMemory{NAME}};
-        if (sharedMemory && sharedMemory->valid()) {
+        if (sharedMemory && sharedMemory->valid())
+        {
             std::clog << argv[0] << ": Attached to shared memory '" << sharedMemory->name() << " (" << sharedMemory->size() << " bytes)." << std::endl;
 
             // Create an OpenCV image header using the data in the shared memory.
@@ -63,10 +67,15 @@ int32_t main(int32_t argc, char **argv) {
             sharedMemory->unlock();
 
             cv::namedWindow("Inspector", CV_WINDOW_AUTOSIZE);
-            int minH{0};
-            int maxH{179};
-            cvCreateTrackbar("Hue (min)", "Inspector", &minH, 179);
-            cvCreateTrackbar("Hue (max)", "Inspector", &maxH, 179);
+            int minH_B{0};
+            int maxH_B{179};
+            int minH_Y{0};
+            int maxH_Y{179};
+            cvCreateTrackbar("BLUE Hue (min)", "Inspector", &minH_B, 179);
+            cvCreateTrackbar("BLUE Hue (max)", "Inspector", &maxH_B, 179);
+
+            cvCreateTrackbar("YELLOW Hue (min)", "Inspector", &minH_Y, 179);
+            cvCreateTrackbar("YELLOW Hue (max)", "Inspector", &maxH_Y, 179);
 
             int minS{0};
             int maxS{255};
@@ -79,11 +88,12 @@ int32_t main(int32_t argc, char **argv) {
             cvCreateTrackbar("Val (max)", "Inspector", &maxV, 255);
 
             // Endless loop; end the program by pressing Ctrl-C.
-            while (cv::waitKey(10)) {
+            while (cv::waitKey(10))
+            {
                 cv::Mat img;
 
                 // Don't wait for a notification of a new frame so that the sender can pause while we are still inspection
-                //sharedMemory->wait();
+                // sharedMemory->wait();
 
                 // Lock the shared memory.
                 sharedMemory->lock();
@@ -101,13 +111,21 @@ int32_t main(int32_t argc, char **argv) {
                 cvtColor(img, imgHSV, cv::COLOR_BGR2HSV);
 
                 cv::Mat imgColorSpace;
-                cv::inRange(imgHSV, cv::Scalar(minH, minS, minV), cv::Scalar(maxH, maxS, maxV), imgColorSpace);
+
+                cv::Mat imgBlue, imgYellow;
+
+                cv::inRange(imgHSV, cv::Scalar(minH_B, minS, minV), cv::Scalar(maxH_B, maxS, maxV), imgBlue);
+                cv::inRange(imgHSV, cv::Scalar(minH_Y, minS, minV), cv::Scalar(maxH_Y, maxS, maxV), imgYellow);
+
+                // Combine the blue and yellow images into one Mat object.
+                cv::bitwise_or(imgBlue, imgYellow, imgColorSpace);
 
                 cv::imshow("Color-Space Image", imgColorSpace);
                 cv::imshow(sharedMemory->name().c_str(), img);
             }
 
-            if (nullptr != iplimage) {
+            if (nullptr != iplimage)
+            {
                 cvReleaseImageHeader(&iplimage);
             }
         }
@@ -115,4 +133,3 @@ int32_t main(int32_t argc, char **argv) {
     }
     return retCode;
 }
-
