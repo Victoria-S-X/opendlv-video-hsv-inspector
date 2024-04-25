@@ -67,22 +67,22 @@ int32_t main(int32_t argc, char **argv)
             sharedMemory->unlock();
 
             cv::namedWindow("Inspector", CV_WINDOW_AUTOSIZE);
-            int minH_B{0};
-            int maxH_B{179};
-            int minH_Y{0};
-            int maxH_Y{179};
+            int minH_B{105};
+            int maxH_B{151};
+            int minH_Y{13};
+            int maxH_Y{32};
             cvCreateTrackbar("BLUE Hue (min)", "Inspector", &minH_B, 179);
             cvCreateTrackbar("BLUE Hue (max)", "Inspector", &maxH_B, 179);
 
             cvCreateTrackbar("YELLOW Hue (min)", "Inspector", &minH_Y, 179);
             cvCreateTrackbar("YELLOW Hue (max)", "Inspector", &maxH_Y, 179);
 
-            int minS{0};
+            int minS{84};
             int maxS{255};
             cvCreateTrackbar("Sat (min)", "Inspector", &minS, 255);
             cvCreateTrackbar("Sat (max)", "Inspector", &maxS, 255);
 
-            int minV{0};
+            int minV{39};
             int maxV{255};
             cvCreateTrackbar("Val (min)", "Inspector", &minV, 255);
             cvCreateTrackbar("Val (max)", "Inspector", &maxV, 255);
@@ -129,6 +129,24 @@ int32_t main(int32_t argc, char **argv)
 
                 // Set detected yellow areas to yellow color (BGR format for yellow)
                 outputImage.setTo(cv::Scalar(0, 255, 255), imgYellow);
+
+                // Apply morphological operations (erosion and dilation) to reduce noise
+                cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+                cv::morphologyEx(imgColorSpace, imgColorSpace, cv::MORPH_OPEN, morphKernel);
+
+                // Find contours in the filtered image
+                std::vector<std::vector<cv::Point>> contours;
+                std::vector<cv::Vec4i> hierarchy;
+                cv::findContours(imgColorSpace, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+                // Draw bounding rectangles around the contours
+                for (size_t i = 0; i < contours.size(); i++)
+                {
+                    cv::Rect boundingRect = cv::boundingRect(contours[i]);
+                    // Print rectangle position information
+                    std::cout << "Rectangle " << i+1 << ": x=" << boundingRect.x << ", y=" << boundingRect.y << ", width=" << boundingRect.width << ", height=" << boundingRect.height << std::endl;
+                    cv::rectangle(img, boundingRect, cv::Scalar(0, 0, 255), 1);
+                }
 
                 cv::imshow("Color-Space Image", imgColorSpace);  // Display the combined mask
                 cv::imshow(sharedMemory->name().c_str(), img);   // Display the original image
