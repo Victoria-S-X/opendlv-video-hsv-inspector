@@ -112,6 +112,7 @@ int32_t main(int32_t argc, char **argv)
 
                 cv::Mat imgColorSpace;
 
+                // Declare an image to store values for blue, and an image to store values for yellow
                 cv::Mat imgBlue, imgYellow;
 
                 cv::inRange(imgHSV, cv::Scalar(minH_B, minS, minV), cv::Scalar(maxH_B, maxS, maxV), imgBlue);
@@ -120,8 +121,18 @@ int32_t main(int32_t argc, char **argv)
                 // Combine the blue and yellow images into one Mat object.
                 cv::bitwise_or(imgBlue, imgYellow, imgColorSpace);
 
-                cv::imshow("Color-Space Image", imgColorSpace);
-                cv::imshow(sharedMemory->name().c_str(), img);
+                // Create an output image initialized to black (all zeros)
+                cv::Mat outputImage = cv::Mat::zeros(img.size(), img.type());
+
+                // Set detected blue areas to blue color (BGR format for blue)
+                outputImage.setTo(cv::Scalar(255, 0, 0), imgBlue);
+
+                // Set detected yellow areas to yellow color (BGR format for yellow)
+                outputImage.setTo(cv::Scalar(0, 255, 255), imgYellow);
+
+                cv::imshow("Color-Space Image", imgColorSpace);  // Display the combined mask
+                cv::imshow(sharedMemory->name().c_str(), img);   // Display the original image
+                cv::imshow("Color Filtered Image", outputImage); // Display the output image with highlighted colors
             }
 
             if (nullptr != iplimage)
