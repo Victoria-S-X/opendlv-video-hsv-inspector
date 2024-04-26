@@ -24,6 +24,9 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <chrono>
+
+std::string getCurrentTime();
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -87,10 +90,12 @@ int32_t main(int32_t argc, char **argv)
             cvCreateTrackbar("Val (min)", "Inspector", &minV, 255);
             cvCreateTrackbar("Val (max)", "Inspector", &maxV, 255);
 
+
             // Endless loop; end the program by pressing Ctrl-C.
             while (cv::waitKey(10))
             {
                 cv::Mat img;
+
 
                 // Don't wait for a notification of a new frame so that the sender can pause while we are still inspection
                 // sharedMemory->wait();
@@ -128,6 +133,15 @@ int32_t main(int32_t argc, char **argv)
                 }
                 img.convertTo(img, -1, alpha, beta);
 
+                int videoWidth = img.cols;
+                int videoHeight = img.rows;
+
+                int centerLineX = videoWidth / 2;
+                int centerLineY = videoHeight / 2;
+
+                // Center Line X: 320 Video width: 640 Video height: 480
+                //std::cout << "Center Line X: " << centerLineX << ", Video width: " << videoWidth  << ", Video height: " << videoHeight << std::endl;
+
                 cv::Mat imgHSV;
                 cvtColor(img, imgHSV, cv::COLOR_BGR2HSV);
 
@@ -153,25 +167,130 @@ int32_t main(int32_t argc, char **argv)
 
                 // Apply morphological operations (erosion and dilation) to reduce noise
                 cv::Mat morphKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-                cv::morphologyEx(imgColorSpace, imgColorSpace, cv::MORPH_OPEN, morphKernel);
+                cv::morphologyEx(outputImage, outputImage, cv::MORPH_OPEN, morphKernel);
 
-                // Find contours in the filtered image
+                cv::Mat canny_output;
+                cv::Canny ( outputImage, canny_output, 100, 200);
+
                 std::vector<std::vector<cv::Point>> contours;
-                std::vector<cv::Vec4i> hierarchy;
-                cv::findContours(imgColorSpace, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+                cv::findContours(canny_output, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+                std::vector<std::vector<cv::Point> > contours_poly( contours.size() );
+                std::vector<cv::Rect> boundRect( contours.size() );
+                std::vector<cv::Point2f>centers( contours.size() );
+
+                for( size_t i = 0; i < contours.size(); i++ )
+                {
+                    cv::approxPolyDP( contours[i], contours_poly[i], 3, true );
+                    boundRect[i] = cv::boundingRect( contours_poly[i] );
+                }
+
+                cv::Mat drawing = cv::Mat::zeros( canny_output.size(), CV_8UC3 );
+
+                // Create a blue list and yellow list to store the boundingRects
+                std::vector<cv::Rect> blueRects;
+                std::vector<cv::Rect> yellowRects;
+
+                // for( size_t i = 0; i< contours.size(); i++ )
+                // {
+                //     cv::Scalar color = cv::Scalar( 0, 255, 0 );
+                //     cv::drawContours( drawing, contours_poly, (int)i, color );
+                //     cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2 );
+                //     std::cout << "Rectangle " << i << " size: " << boundRect[i].tl() << "x" << boundRect[i].br() << std::endl; 
+                // }
+
+
+                // // Find contours in the filtered image
+                // std::vector<std::vector<cv::Point>> contours;
+                // std::vector<cv::Vec4i> hierarchy;
+                // cv::findContours(imgColorSpace, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
 
                 // Draw bounding rectangles around the contours
                 for (size_t i = 0; i < contours.size(); i++)
                 {
+                    std::string currentTime = getCurrentTime();
+
+                    // Specify the position and size of the rectangle
+                    cv::Rect upHalf(0, 0, 640, 240);
+                    cv::Rect carBody(180, 380, 300, 100);
+
+                    cv::Scalar color = cv::Scalar( 0, 255, 0 );
+                    cv::drawContours( drawing, contours_poly, (int)i, color );
+                    cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 1);
+
                     cv::Rect boundingRect = cv::boundingRect(contours[i]);
+
+                    // Ignore the rectangles at top half and the car's body
+                    if(boundingRect.height > 10 && boundingRect.y > centerLineY &&
+                        !upHalf.contains(boundingRect.tl()) &&
+                        !carBody.contains(boundingRect.tl())){
+
+                        // The color is determined by how the pixels contained in boundingRect are distributed in imgBlue and imgYellow
+                        cv::Mat roiBlue = imgBlue(boundingRect);
+                        cv::Mat roiYellow = imgYellow(boundingRect);
+                        
+                        // Count the total number of pixels in the blue section and the yellow section
+                        int bluePixels = cv::countNonZero(roiBlue);
+                        int yellowPixels = cv::countNonZero(roiYellow);
+                        
+                        // Judge the color based on the number of pixels
+                        if (bluePixels > yellowPixels) {
+                            // Push boundingRect to the list
+                            blueRects.push_back(boundingRect);
+                            std::cout << "Blue cones rectangle: x=" << boundingRect.x << ", y=" << boundingRect.y << ", height=" << boundingRect.height << ", time=" << currentTime << std::endl;
+                        } else {
+                            // Push boundingRect to the list
+                            yellowRects.push_back(boundingRect);
+                            std::cout << "Yellow cones rectangle: x=" << boundingRect.x << ", y=" << boundingRect.y << ", height=" << boundingRect.height << ", time=" << currentTime << std::endl;
+                        }
+                    }
+                    
+                    
+
                     // Print rectangle position information
-                    std::cout << "Rectangle " << i + 1 << ": x=" << boundingRect.x << ", y=" << boundingRect.y << ", width=" << boundingRect.width << ", height=" << boundingRect.height << std::endl;
-                    cv::rectangle(img, boundingRect, cv::Scalar(0, 0, 255), 1);
+                    std::cout << "Rectangle " << i + 1 << ": x=" << boundingRect.x << ", y=" << boundingRect.y << ", width=" << boundingRect.width << ", height=" << boundingRect.height << ", time=" << getCurrentTime() << std::endl;
+                    cv::rectangle(img, boundRect[i].tl(), boundRect[i].br(), cv::Scalar(0, 255, 0), 1);
+
+                    // Draw the fixed size rectangle on the image
+                    cv::rectangle(img, upHalf, cv::Scalar(0, 0, 255), 3);
+                    cv::rectangle(img, carBody, cv::Scalar(0, 0, 255), 3);
                 }
 
-                cv::imshow("Color-Space Image", imgColorSpace);  // Display the combined mask
+                // Find the two boundingrects with the largest height values in the blueRects
+                std::partial_sort(blueRects.begin(), blueRects.end(), blueRects.end(), [](const cv::Rect& a, const cv::Rect& b) {
+                    return a.height > b.height;
+                });
+
+                // Find the two boundingrects with the highest height values in yellowRects
+                std::partial_sort(yellowRects.begin(), yellowRects.end(), yellowRects.end(), [](const cv::Rect& a, const cv::Rect& b) {
+                    return a.height > b.height;
+                });
+
+                // Calculate the distance ratio of the blue rectangle
+                double blueDistanceRatio = 0.0;
+                if (blueRects.size() >= 2) {
+                    int blueHeightSum = blueRects[0].height + blueRects[1].height;
+                    int blueCenterSum = std::abs(centerLineX - blueRects[0].x) + std::abs(centerLineX - blueRects[1].x);
+                    blueDistanceRatio = static_cast<double>(blueCenterSum) / blueHeightSum / 2.0;
+                }
+
+                // Calculate the distance ratio of the yellow rectangle
+                double yellowDistanceRatio = 0.0;
+                if (yellowRects.size() >= 2) {
+                    int yellowHeightSum = yellowRects[0].height + yellowRects[1].height;
+                    int yellowCenterSum = std::abs(centerLineX - yellowRects[0].x) + std::abs(centerLineX - yellowRects[1].x);
+                    yellowDistanceRatio = static_cast<double>(yellowCenterSum) / yellowHeightSum / 2.0;
+                }
+
+                // Print distance ratio
+                std::cout << "Blue distance ratio: " << blueDistanceRatio << std::endl;
+                std::cout << "Yellow distance ratio: " << yellowDistanceRatio << std::endl;
+
+                cv::imshow("Color-Space Image", drawing);  // Display the combined mask
                 cv::imshow(sharedMemory->name().c_str(), img);   // Display the original image
                 cv::imshow("Color Filtered Image", outputImage); // Display the output image with highlighted colors
+
             }
 
             if (nullptr != iplimage)
@@ -182,4 +301,26 @@ int32_t main(int32_t argc, char **argv)
         retCode = 0;
     }
     return retCode;
+}
+
+std::string getCurrentTime() {
+    // Gets the current timestamp, expressed as a point in time on the system clock
+    auto now = std::chrono::system_clock::now();
+
+    // Convert a point in time to time t
+    auto now_c = std::chrono::system_clock::to_time_t(now);
+
+    // Gets the microsecond portion of the current time
+    auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) % 1000000;
+
+    // Convert the time portion to local time
+    std::tm tm_now{};
+    localtime_r(&now_c, &tm_now);
+
+    // Creates a stream of strings to format the time
+    std::ostringstream oss;
+    oss << std::put_time(&tm_now, "%Y-%m-%d %H:%M:%S") << '.' << std::setw(6) << std::setfill('0') << now_us.count();
+
+    // Return a string time
+    return oss.str();
 }
