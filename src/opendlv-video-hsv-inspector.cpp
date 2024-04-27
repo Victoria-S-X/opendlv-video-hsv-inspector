@@ -25,8 +25,10 @@
 #include <memory>
 #include <mutex>
 #include <chrono>
+#include <fstream>
 
 std::string getCurrentTime();
+
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -145,16 +147,11 @@ int32_t main(int32_t argc, char **argv)
                 cv::Mat imgHSV;
                 cvtColor(img, imgHSV, cv::COLOR_BGR2HSV);
 
-                cv::Mat imgColorSpace;
-
                 // Declare an image to store values for blue, and an image to store values for yellow
                 cv::Mat imgBlue, imgYellow;
 
                 cv::inRange(imgHSV, cv::Scalar(minH_B, minS, minV), cv::Scalar(maxH_B, maxS, maxV), imgBlue);
                 cv::inRange(imgHSV, cv::Scalar(minH_Y, minS, minV), cv::Scalar(maxH_Y, maxS, maxV), imgYellow);
-
-                // Combine the blue and yellow images into one Mat object.
-                cv::bitwise_or(imgBlue, imgYellow, imgColorSpace);
 
                 // Create an output image initialized to black (all zeros)
                 cv::Mat outputImage = cv::Mat::zeros(img.size(), img.type());
@@ -190,20 +187,6 @@ int32_t main(int32_t argc, char **argv)
                 // Create a blue list and yellow list to store the boundingRects
                 std::vector<cv::Rect> blueRects;
                 std::vector<cv::Rect> yellowRects;
-
-                // for( size_t i = 0; i< contours.size(); i++ )
-                // {
-                //     cv::Scalar color = cv::Scalar( 0, 255, 0 );
-                //     cv::drawContours( drawing, contours_poly, (int)i, color );
-                //     cv::rectangle( drawing, boundRect[i].tl(), boundRect[i].br(), color, 2 );
-                //     std::cout << "Rectangle " << i << " size: " << boundRect[i].tl() << "x" << boundRect[i].br() << std::endl; 
-                // }
-
-
-                // // Find contours in the filtered image
-                // std::vector<std::vector<cv::Point>> contours;
-                // std::vector<cv::Vec4i> hierarchy;
-                // cv::findContours(imgColorSpace, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
 
                 // Draw bounding rectangles around the contours
@@ -268,20 +251,60 @@ int32_t main(int32_t argc, char **argv)
                 });
 
                 // Calculate the distance ratio of the blue rectangle
-                double blueDistanceRatio = 0.0;
+                double blueDistanceRatio = 20.0;
                 if (blueRects.size() >= 2) {
-                    int blueHeightSum = blueRects[0].height + blueRects[1].height;
-                    int blueCenterSum = std::abs(centerLineX - blueRects[0].x) + std::abs(centerLineX - blueRects[1].x);
-                    blueDistanceRatio = static_cast<double>(blueCenterSum) / blueHeightSum / 2.0;
+                    blueDistanceRatio = (static_cast<double>(std::abs(centerLineX - blueRects[0].x)) / blueRects[0].height + 
+                                        static_cast<double>(std::abs(centerLineX - blueRects[1].x)) / blueRects[1].height) / 2;
                 }
 
                 // Calculate the distance ratio of the yellow rectangle
-                double yellowDistanceRatio = 0.0;
+                double yellowDistanceRatio = 20.0;
                 if (yellowRects.size() >= 2) {
-                    int yellowHeightSum = yellowRects[0].height + yellowRects[1].height;
-                    int yellowCenterSum = std::abs(centerLineX - yellowRects[0].x) + std::abs(centerLineX - yellowRects[1].x);
-                    yellowDistanceRatio = static_cast<double>(yellowCenterSum) / yellowHeightSum / 2.0;
+                    yellowDistanceRatio = (static_cast<double>(std::abs(centerLineX - yellowRects[0].x)) / yellowRects[0].height + 
+                                        static_cast<double>(std::abs(centerLineX - yellowRects[1].x)) / yellowRects[1].height) / 2;
                 }
+
+                // //To determin if the blue cones is on the left or reverse
+                // // Sum the blue cone's rectangle's x
+                // double blueXSum;
+                // for(int i = 0; i < blueRects.size(); i++ ){
+                //     blueXSum += blueRects[i].x;
+                // }
+                // // Sum the yellow cone's rectangle's x
+                // double yellowXSum;
+                // for(int i = 0; i < yellowRects.size(); i++ ){
+                //     yellowXSum += yellowRects[i].x;
+                // }
+
+                // // Using the mean of blue to minus mean of yellow to determin if the cones is reverse
+                // double isReverse = blueXSum / blueRects.size() - yellowXSum / yellowRects.size();
+
+                // double diffRatio = 0;
+                // if(isReverse < 0){
+                //     diffRatio = blueDistanceRatio - yellowDistanceRatio;
+                // }else{
+                //     diffRatio = yellowDistanceRatio - blueDistanceRatio;
+                // }
+                
+                // Blue cones on the left
+                double diffRatio = blueDistanceRatio - yellowDistanceRatio;
+                // Yellow cones on the left
+                //double diffRatio = yellowDistanceRatio - blueDistanceRatio;
+
+                if(diffRatio > 0){
+
+                    cv::arrowedLine(img, cv::Point(260, 320), cv::Point(260 - diffRatio * 10, 320), cv::Scalar(0, 0, 255), 10);
+            
+                }else{
+
+                    cv::arrowedLine(img, cv::Point(380, 320), cv::Point(380 - diffRatio * 10, 320), cv::Scalar(0, 0, 255), 10);
+
+                }
+                
+                double mappedDiffRatio = 0.3 * diffRatio / 5;
+                
+                std::cout << "Mapped diffRatio: " << mappedDiffRatio << std::endl;
+
 
                 // Print distance ratio
                 std::cout << "Blue distance ratio: " << blueDistanceRatio << std::endl;
