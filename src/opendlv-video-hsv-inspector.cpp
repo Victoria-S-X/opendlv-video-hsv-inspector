@@ -307,7 +307,7 @@ int32_t main(int32_t argc, char **argv)
                 cv::putText(img, std::to_string(groundSteering), cv::Point(240, 360), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
                 
                 // Print mapped diffRatio to console
-                std::cout << "DiffRatio: " << diffRatio << ", Mapped diffRatio: " << groundSteering << std::endl;
+                std::cout << "DiffRatio: " << diffRatio << ", Ground Steering Request: " << groundSteering << std::endl;
 
 
                 // Print distance ratio
