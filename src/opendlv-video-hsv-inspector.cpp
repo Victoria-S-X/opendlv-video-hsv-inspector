@@ -291,6 +291,8 @@ int32_t main(int32_t argc, char **argv)
                 // Yellow cones on the left
                 //double diffRatio = yellowDistanceRatio - blueDistanceRatio;
 
+                double groundSteering = 0.3 * diffRatio / 20.0;
+
                 if(diffRatio > 0){
 
                     cv::arrowedLine(img, cv::Point(260, 320), cv::Point(260 - diffRatio * 10, 320), cv::Scalar(0, 0, 255), 10);
@@ -300,10 +302,12 @@ int32_t main(int32_t argc, char **argv)
                     cv::arrowedLine(img, cv::Point(380, 320), cv::Point(380 - diffRatio * 10, 320), cv::Scalar(0, 0, 255), 10);
 
                 }
+
+                // Print the groundSteering to video
+                cv::putText(img, std::to_string(groundSteering), cv::Point(240, 360), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255, 255, 255), 2);
                 
-                double mappedDiffRatio = 0.3 * diffRatio / 5;
-                
-                std::cout << "Mapped diffRatio: " << mappedDiffRatio << std::endl;
+                // Print mapped diffRatio to console
+                std::cout << "DiffRatio: " << diffRatio << ", Mapped diffRatio: " << groundSteering << std::endl;
 
 
                 // Print distance ratio
